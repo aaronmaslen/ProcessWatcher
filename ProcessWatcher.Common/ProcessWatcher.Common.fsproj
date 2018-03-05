@@ -1,12 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
-    <Compile Include="ProcessWatcher.fs" />
-    <Compile Include="Library.fs" />
+    <Compile Include="ProcessWatcher.fs"/>
+    <Compile Include="Library.fs"/>
   </ItemGroup>
-
+  <ItemGroup>
+    <PackageReference Include="System.Reactive" Version="*"/>
+  </ItemGroup>
 </Project>
