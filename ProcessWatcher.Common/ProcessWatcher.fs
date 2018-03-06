@@ -59,9 +59,13 @@ type ProcessWatcher(processPath, start, watchChildren) =
                                                 (List.where (fun (p, _) -> p <> pid) pids)
                                                 (List.singleton (pid, false)))
 
-        createEvent.Add(fun targetInstance -> processEvent.Trigger (Start, targetInstance.["Name"].ToString()))
+        createEvent.Add(fun targetInstance -> processEvent.Trigger (Start,
+                                                                    targetInstance.["ProcessId"] :?> uint32,
+                                                                    targetInstance.["Name"].ToString()))
 
-        deleteEvent.Add(fun targetInstance -> processEvent.Trigger (Exit, targetInstance.["Name"].ToString()))
+        deleteEvent.Add(fun targetInstance -> processEvent.Trigger (Exit,
+                                                                    targetInstance.["ProcessId"] :?> uint32,
+                                                                    targetInstance.["Name"].ToString()))
 
         deleteEvent.Add(fun _ -> if not (pids.Any(fun (_, running) -> running)) then endEvent.Trigger())
 

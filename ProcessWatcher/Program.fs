@@ -5,7 +5,7 @@ open ProcessWatcher.Common
 [<EntryPoint>]
 let main argv =
     let watcher = new ProcessWatcher(argv.[0], true, true)
-    watcher.ProcessEvent.Add (fun (eventType, name) -> Console.WriteLine("{0} {1}", name, eventType))
+    watcher.ProcessEvent.Add (fun (eventType, pid, name) -> Console.WriteLine("{0} ({1}) {2}", name, pid, eventType))
     watcher.Start()
     Async.AwaitEvent (watcher.AllProcessesEndedEvent) |> Async.RunSynchronously
     0 // return an integer exit code
