@@ -3,11 +3,6 @@ namespace DisplayModeSwitch
 
 open System
 
-type FixedOutput =
-| Default   = 0u
-| Stretch   = 1u
-| Center    = 2u
-
 type DisplayOrientation =
 | Default       = 0x0u
 | Rotated90     = 0x1u
@@ -15,9 +10,9 @@ type DisplayOrientation =
 | Rotated270    = 0x4u
 
 type FixedOutputMode =
-| Default = 0x0u
-| Stretch = 0x1u
-| Center  = 0x2u
+| Default = 0u
+| Stretch = 1u
+| Center  = 2u
 
 [<Flags>]
 type DisplayFlags =
@@ -68,7 +63,7 @@ module Native =
         d.cb <- uint32 <| Marshal.SizeOf(d)
         d
 
-    [<DllImport(@"user32.dll", EntryPoint = @"EnumDisplayDevicesW")>]
+    [<DllImport(@"user32.dll", EntryPoint = @"EnumDisplayDevicesW", CharSet = CharSet.Unicode)>]
     extern bool EnumDisplayDevices(
         string lpDevice,
         uint32 iDevNum,
@@ -115,7 +110,7 @@ module Native =
         val mutable PositionX : int32
         val mutable PositionY : int32
         val mutable Orientation : DisplayOrientation
-        val mutable FixedOutput : FixedOutput
+        val mutable FixedOutput : FixedOutputMode
     
     [<Struct; StructLayout(LayoutKind.Sequential)>]
     type PrintDeviceModeFields =
@@ -172,7 +167,7 @@ module Native =
     type DevModeDisplayAttribute =
     | Position of int32 * int32
     | Orientation of DisplayOrientation
-    | FixedOutput of FixedOutput
+    | FixedOutput of FixedOutputMode
     | LogPixels of uint16
     | BitsPerPixel of uint32
     | PixelsWidth of uint32
@@ -268,12 +263,21 @@ module Native =
         s.Size <- uint16 <| Marshal.SizeOf(s)
         s
 
-    [<DllImport(@"user32.dll", EntryPoint = "EnumDisplaySettingsExW")>]
+    type EnumDisplaySettingsModeNum =
+    | CurrentSettings       = 0x11111111u
+    | RegistrySettings      = 0x11111110u
+
+    type EnumDisplaySettingsExFlags =
+    | None          = 0x0u
+    | RawMode       = 0x2u
+    | RotatedMode   = 0x4u
+
+    [<DllImport(@"user32.dll", EntryPoint = "EnumDisplaySettingsExW", CharSet = CharSet.Unicode)>]
     extern bool EnumDisplaySettingsEx(
         string lpszDeviceName,
         uint32 iModeNum,
         DevMode& lpDevMode,
-        uint32 dwFlags
+        EnumDisplaySettingsExFlags dwFlags
     )
 
     type ChangeDisplaySettingsResult =
@@ -296,7 +300,7 @@ module Native =
     | NoReset           = 0x10000000u
     | Reset             = 0x40000000u
     
-    [<DllImport(@"user32.dll", EntryPoint = "ChangeDisplaySettingsExW")>]
+    [<DllImport(@"user32.dll", EntryPoint = "ChangeDisplaySettingsExW", CharSet = CharSet.Unicode)>]
     extern ChangeDisplaySettingsResult ChangeDisplaySettingsEx(
         string lpszDeviceName,
         DevMode& lpDevMode,

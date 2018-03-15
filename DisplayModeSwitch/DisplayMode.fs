@@ -3,12 +3,13 @@ namespace DisplayModeSwitch
 module DisplayMode =
     open Native
 
-    type Device internal (nativeDevice : DisplayDevice) =
-        let hasFlag = nativeDevice.StateFlags.HasFlag
-        member __.Name = nativeDevice.DeviceName
-        member __.DeviceString = nativeDevice.DeviceString
-        member __.ID = nativeDevice.DeviceID
-        member __.Key = nativeDevice.DeviceKey
+    type Device internal (device : DisplayDevice) =
+        let hasFlag = device.StateFlags.HasFlag
+        member internal __.NativeDevice = device
+        member __.Name = device.DeviceName
+        member __.DeviceString = device.DeviceString
+        member __.ID = device.DeviceID
+        member __.Key = device.DeviceKey
         member __.Active = hasFlag StateFlags.Active
         member __.MirroringDriver = hasFlag StateFlags.MirroringDriver
         member __.ModesPruned = hasFlag StateFlags.DisplayDeviceModesPruned
@@ -21,8 +22,7 @@ module DisplayMode =
             (fun index ->
                 let mutable d = NewDisplayDeviceStruct()
                 if EnumDisplayDevices(null, index |> uint32, &d, 0u) then
-                    let dev = Device d
-                    Some (dev, index + 1)
+                    Some (Device d, index + 1)
                 else None)
             0
 
@@ -33,6 +33,7 @@ module DisplayMode =
                                         match a with
                                         | Display d -> Seq.singleton d
                                         | _ -> Seq.empty))
+        member internal __.NativeDevMode = mode
         member __.DeviceName = mode.DeviceName
         member __.Position =
             displayAttributes |>
@@ -91,19 +92,38 @@ module DisplayMode =
                             | PixelsHeight y -> Seq.singleton y
                             | _ -> Seq.empty
                     ) >> Seq.tryHead)
-
-            // Which is easier to read?
-            // This?
+                    
             xres |>
             Option.bind (
                 fun x ->
                     yres |>
                     Option.map (fun y -> (x,y))
                 )
-            // // Or this?
-            // match xres with
-            // | Some x ->
-            //     match yres with
-            //     | Some y -> Some (x, y)
-            //     | None -> None
-            // | None -> None
+        member __.RefreshRate =
+            displayAttributes |>
+                (Seq.collect (
+                    fun d ->
+                        match d with
+                        | Frequency f -> Seq.singleton f
+                        | _ -> Seq.empty
+                ) >> Seq.tryHead)
+    
+    let GetDisplayModes (dev : Device) =
+        Seq.unfold
+            (fun index ->
+                let mutable m = NewDevModeStruct()
+                if EnumDisplaySettingsEx
+                    (
+                        dev.NativeDevice.DeviceName,
+                        index |> uint32,
+                        &m,
+                        EnumDisplaySettingsExFlags.None
+                    )
+                then Some (DisplayMode m, index + 1)
+                else None)
+            0
+    let GetCurrentDisplayMode (dev : Device) =
+        let mutable m = NewDevModeStruct()
+        if EnumDisplaySettingsEx(dev.NativeDevice.DeviceName, -1 |> uint32 , &m, EnumDisplaySettingsExFlags.None)
+        then DisplayMode m |> Some
+        else None
