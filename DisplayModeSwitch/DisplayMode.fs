@@ -116,6 +116,30 @@ module DisplayMode =
                         | Frequency f -> Seq.singleton f
                         | _ -> Seq.empty
                 ) >> Seq.tryHead)
+        override this.ToString() =
+            let resolution =
+                match this.Resolution with
+                | Some (x, y) -> sprintf "%ux%u" x y
+                | None -> "Unspecified resolution"
+            let refreshRate =
+                match this.RefreshRate with
+                | Some r -> Some <| sprintf "%uHz" r
+                | None -> None
+            let scaleMode =
+                this.FixedOutput |> 
+                Option.bind
+                    (fun f ->
+                        match f with
+                        | FixedOutputMode.Stretch -> Some "Stretch"
+                        | FixedOutputMode.Center -> Some "Center"
+                        | _ -> None
+                    )
+            let mutable output = sprintf "%s" resolution
+
+            output <- match refreshRate with Some r -> sprintf "%s@%s" output r | None -> output
+            output <- match scaleMode with Some s -> sprintf "%s (%s)" output s | None -> output
+            
+            output
     
     let GetDisplayModes (dev : Device) =
         Seq.unfold
@@ -175,6 +199,6 @@ module DisplayMode =
         let result = setDisplayMode dev mode flags
 
         match result with
-        | ChangeDisplaySettingsResult.Successful -> Ok ()
-        | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded ()
+        | ChangeDisplaySettingsResult.Successful -> Ok()
+        | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded()
         | _ -> Error <| Failure (result |> uint32)
