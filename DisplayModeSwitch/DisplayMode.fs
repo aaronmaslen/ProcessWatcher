@@ -1,6 +1,8 @@
 namespace DisplayModeSwitch
 
 module DisplayMode =
+    open System
+
     open Native
 
     type Device internal (device : DisplayDevice) =
@@ -16,6 +18,13 @@ module DisplayMode =
         member __.PrimaryDevice = hasFlag StateFlags.PrimaryDevice
         member __.Removable = hasFlag StateFlags.Removable
         member __.VgaCompatible = hasFlag StateFlags.VgaCompatible
+        override this.ToString() =
+            sprintf
+                "Name: %s \nDeviceString: %s\nID: %s\nKey: %s"
+                this.Name
+                this.DeviceString
+                this.ID
+                this.Key
 
     let GetDisplayDevices() =
         Seq.unfold
@@ -124,6 +133,48 @@ module DisplayMode =
             0
     let GetCurrentDisplayMode (dev : Device) =
         let mutable m = NewDevModeStruct()
-        if EnumDisplaySettingsEx(dev.NativeDevice.DeviceName, -1 |> uint32 , &m, EnumDisplaySettingsExFlags.None)
-        then DisplayMode m |> Some
+        if EnumDisplaySettingsEx
+            (
+                dev.NativeDevice.DeviceName,
+                EnumDisplaySettingsModeNum.CurrentSettings |> uint32,
+                &m,
+                EnumDisplaySettingsExFlags.None
+            )
+        then Some <| DisplayMode m
         else None
+
+    let internal setDisplayMode (dev : Device) (mode : DisplayMode) (flags : ChangeDisplayModeFlags) =
+        let mutable devMode = mode.NativeDevMode
+        ChangeDisplaySettingsEx(dev.NativeDevice.DeviceName, &devMode, IntPtr.Zero, flags, IntPtr.Zero)
+
+    type SetDisplayModeResult =
+    | RestartNeeded of unit
+    | Failure of uint32
+
+    type SetDisplayModeOptions =
+    | Temporary
+    | Reset
+    | SetPrimary
+    | Test
+
+    let SetDisplayMode dev mode (options : SetDisplayModeOptions seq) =
+        let flags =
+            options |>
+            Seq.fold
+                (fun s c ->
+                    match c with
+                    | Temporary -> ChangeDisplayModeFlags.FullScreen
+                    | Reset -> ChangeDisplayModeFlags.Reset
+                    | SetPrimary -> ChangeDisplayModeFlags.SetPrimary
+                    | Test -> ChangeDisplayModeFlags.Test
+
+                    ||| s
+                )
+                ChangeDisplayModeFlags.None
+        
+        let result = setDisplayMode dev mode flags
+
+        match result with
+        | ChangeDisplaySettingsResult.Successful -> Ok ()
+        | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded ()
+        | _ -> Error <| Failure (result |> uint32)

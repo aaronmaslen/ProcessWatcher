@@ -264,8 +264,8 @@ module Native =
         s
 
     type EnumDisplaySettingsModeNum =
-    | CurrentSettings       = 0x11111111u
-    | RegistrySettings      = 0x11111110u
+    | CurrentSettings       = 0xffffffffu
+    | RegistrySettings      = 0xfffffffeu
 
     type EnumDisplaySettingsExFlags =
     | None          = 0x0u
@@ -292,6 +292,7 @@ module Native =
 
     [<Flags>]
     type ChangeDisplayModeFlags =
+    | None              = 0x00000000u
     | UpdateRegistry    = 0x00000001u
     | Test              = 0x00000002u
     | FullScreen        = 0x00000004u

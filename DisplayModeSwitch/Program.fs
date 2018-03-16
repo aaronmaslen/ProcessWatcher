@@ -6,7 +6,7 @@ open DisplayModeSwitch
 [<EntryPoint>]
 let main argv =
     for d in (GetDisplayDevices() |> Seq.filter (fun d -> d.Active)) do 
-        printfn "%s %s%s" d.DeviceString d.Name (if d.PrimaryDevice then "*" else "")
+        printfn "%s" <| d.ToString()
         for m in (GetDisplayModes d) do
             let (xres, yres) =
                 match m.Resolution with
