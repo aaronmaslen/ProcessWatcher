@@ -18,16 +18,10 @@ let main argv =
             (GetDisplayModes d) |>
             Seq.filter
                 (fun m ->
-                    match
-                        m.FixedOutput |> 
-                        Option.map
-                            (fun f ->
-                                match f with
-                                | FixedOutputMode.Default -> true
-                                | _ -> false
-                            ) with
-                    | Some f -> f
+                    match m.FixedOutput with
                     | None -> true
+                    | Some FixedOutputMode.Default -> true
+                    | _ -> false
                 ) do
             printfn "    %s" <| m.ToString()
     0 // return an integer exit code

@@ -32,90 +32,120 @@ module DisplayMode =
                 let mutable d = NewDisplayDeviceStruct()
                 if EnumDisplayDevices(null, index |> uint32, &d, 0u) then
                     Some (Device d, index + 1)
-                else None)
+                else None
+            )
             0
 
     type DisplayMode internal (mode : DevMode) =
         let displayAttributes = 
-            mode |> (GetAttributes >> 
-                        Seq.collect (fun a ->
-                                        match a with
-                                        | Display d -> Seq.singleton d
-                                        | _ -> Seq.empty))
+            mode |>
+            (
+                GetAttributes >>
+                Seq.collect
+                    (fun a ->
+                        match a with
+                        | Display d -> Seq.singleton d
+                        | _ -> Seq.empty
+                    )
+            )
         member internal __.NativeDevMode = mode
         member __.DeviceName = mode.DeviceName
         member __.Position =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (
+                Seq.collect
+                    (fun d ->
                         match d with
                         | Position (x, y) -> Seq.singleton (x, y)
                         | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         member __.Orientation =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (
+                Seq.collect 
+                    (fun d ->
                         match d with 
                         | DevModeDisplayAttribute.Orientation o -> Seq.singleton o
                         | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         member __.FixedOutput =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (
+                Seq.collect
+                    (fun d ->
                         match d with
                         | FixedOutput f -> Seq.singleton f
                         | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         member __.LogPixels =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (   
+                Seq.collect
+                    (fun d ->
                         match d with
                         | LogPixels l -> Seq.singleton l
                         | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         member __.BitsPerPixel =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (
+                Seq.collect
+                    (fun d ->
                         match d with
                         | BitsPerPixel b -> Seq.singleton b
                         | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         member __.Resolution =
             let xres =
                 displayAttributes |>
-                    (Seq.collect (
-                        fun d ->
+                (
+                    Seq.collect
+                        (fun d ->
                             match d with
                             | PixelsWidth x -> Seq.singleton x
                             | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                        ) 
+                    >> Seq.tryHead
+                )
             let yres =
                 displayAttributes |>
-                    (Seq.collect (
-                        fun d ->
+                (
+                    Seq.collect
+                        (fun d ->
                             match d with
                             | PixelsHeight y -> Seq.singleton y
                             | _ -> Seq.empty
-                    ) >> Seq.tryHead)
+                        )
+                    >> Seq.tryHead
+                )
                     
             xres |>
-            Option.bind (
-                fun x ->
+            Option.bind 
+                (fun x ->
                     yres |>
                     Option.map (fun y -> (x,y))
                 )
         member __.RefreshRate =
             displayAttributes |>
-                (Seq.collect (
-                    fun d ->
+            (
+                Seq.collect
+                    (fun d ->
                         match d with
                         | Frequency f -> Seq.singleton f
                         | _ -> Seq.empty
-                ) >> Seq.tryHead)
+                    )
+                >> Seq.tryHead
+            )
         override this.ToString() =
             let resolution =
                 match this.Resolution with
@@ -126,7 +156,7 @@ module DisplayMode =
                 | Some r -> Some <| sprintf "%uHz" r
                 | None -> None
             let scaleMode =
-                this.FixedOutput |> 
+                this.FixedOutput |>
                 Option.bind
                     (fun f ->
                         match f with
@@ -134,10 +164,9 @@ module DisplayMode =
                         | FixedOutputMode.Center -> Some "Center"
                         | _ -> None
                     )
-            let mutable output = sprintf "%s" resolution
-
-            output <- match refreshRate with Some r -> sprintf "%s@%s" output r | None -> output
-            output <- match scaleMode with Some s -> sprintf "%s (%s)" output s | None -> output
+            let output = sprintf "%s" resolution
+            let output = match refreshRate with Some r -> sprintf "%s@%s" output r | None -> output
+            let output = match scaleMode with Some s -> sprintf "%s (%s)" output s | None -> output
             
             output
     
@@ -172,7 +201,7 @@ module DisplayMode =
         ChangeDisplaySettingsEx(dev.NativeDevice.DeviceName, &devMode, IntPtr.Zero, flags, IntPtr.Zero)
 
     type SetDisplayModeResult =
-    | RestartNeeded of unit
+    | RestartNeeded
     | Failure of uint32
 
     type SetDisplayModeOptions =
@@ -200,5 +229,5 @@ module DisplayMode =
 
         match result with
         | ChangeDisplaySettingsResult.Successful -> Ok()
-        | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded()
+        | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded
         | _ -> Error <| Failure (result |> uint32)
