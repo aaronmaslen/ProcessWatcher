@@ -1,4 +1,5 @@
 namespace ProcessWatcher.Common
+
 open System
 open System.Diagnostics
 open System.IO
@@ -23,6 +24,13 @@ module Wmi =
         if started then
             watcher.Stop()
             started <- false
+    let Property<'T> name (mbe : ManagementBaseObject) = mbe.[name] :?> 'T
+    let TargetInstance = Property<ManagementBaseObject> "TargetInstance"
+    let Pid = Property<uint32> "ProcessId"
+    let ParentPid = Property<uint32> "ParentProcessId"
+    let ProcessName = Property<string> "Name"
+
+
 
 type ProcessEventType =
 | Start
@@ -34,38 +42,58 @@ type ProcessWatcher(processPath, start, watchChildren) =
     let processEvent = new Event<_>()
     let endEvent = new Event<_>()
     let createEvent = Wmi.CreateEvent
-                         .Select(fun ce -> ce.["TargetInstance"] :?> ManagementBaseObject)
+                         .Select(Wmi.TargetInstance)
                          .Where(fun targetInstance ->
-                                    pids.Any(fun (pid, _) -> (targetInstance.["ProcessId"] :?> uint32) = pid) ||
-                                    targetInstance.["Name"].ToString() = processName ||
+                                    pids.Any(fun (pid, _) ->
+                                                (Wmi.Pid targetInstance) = pid
+                                     ) ||
+                                    (Wmi.ProcessName targetInstance) = processName ||
                                     if watchChildren then
-                                        pids.Any(fun (pid, _) -> (targetInstance.["ParentProcessId"] :?> uint32) = pid)
-                                    else false)
+                                        pids.Any(fun (pid, _) ->
+                                                    (Wmi.ParentPid targetInstance) = pid
+                                        )
+                                    else false
+                         )
     let deleteEvent = Wmi.DeleteEvent
-                         .Select(fun ce -> ce.["TargetInstance"] :?> ManagementBaseObject)
+                         .Select(Wmi.TargetInstance)
                          .Where(fun targetInstance ->
-                                    pids.Any(fun (pid, _) -> (targetInstance.["ProcessId"] :?> uint32) = pid) ||
-                                    targetInstance.["Name"].ToString() = processName)
+                                    pids.Any(fun (pid, _) ->
+                                                (Wmi.Pid targetInstance) = pid
+                                     ) ||
+                                    (Wmi.ProcessName targetInstance) = processName
+                         )
     member __.Start() =
         createEvent.Add(fun targetInstance ->
-                            let pid = targetInstance.["ProcessId"] :?> uint32
+                            let pid = Wmi.Pid targetInstance
                             if not (pids.Any(fun (p, _) -> p = pid)) then
-                                pids <- List.append pids (List.singleton (pid, true)))
+                                pids <- List.append pids (List.singleton (pid, true))
+        )
 
         deleteEvent.Add(fun targetInstance ->
-                            let pid = targetInstance.["ProcessId"] :?> uint32
+                            let pid = Wmi.Pid targetInstance
                             if pids.Any(fun (p, _) -> p = pid) then
                                 pids <- List.append
                                                 (List.where (fun (p, _) -> p <> pid) pids)
-                                                (List.singleton (pid, false)))
+                                                (List.singleton (pid, false))
+        )
 
-        createEvent.Add(fun targetInstance -> processEvent.Trigger (Start,
-                                                                    targetInstance.["ProcessId"] :?> uint32,
-                                                                    targetInstance.["Name"].ToString()))
+        createEvent.Add(fun targetInstance -> 
+                            processEvent
+                                .Trigger(
+                                    Start,
+                                    Wmi.Pid targetInstance,
+                                    Wmi.ProcessName targetInstance
+                                )
+        )
 
-        deleteEvent.Add(fun targetInstance -> processEvent.Trigger (Exit,
-                                                                    targetInstance.["ProcessId"] :?> uint32,
-                                                                    targetInstance.["Name"].ToString()))
+        deleteEvent.Add(fun targetInstance ->
+                            processEvent
+                                .Trigger(
+                                    Exit,
+                                    Wmi.Pid targetInstance,
+                                    Wmi.ProcessName targetInstance
+                                )
+        )
 
         deleteEvent.Add(fun _ -> if not (pids.Any(fun (_, running) -> running)) then endEvent.Trigger())
 

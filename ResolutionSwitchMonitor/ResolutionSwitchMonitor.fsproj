@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net471</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DisplayModeSwitch.Common\DisplayModeSwitch.Common.fsproj">
+      <Name>DisplayModeSwitch.Common.fsproj</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ProcessWatcher.Common\ProcessWatcher.Common.fsproj">
+      <Name>ProcessWatcher.Common.fsproj</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

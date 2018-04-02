@@ -4,7 +4,7 @@ open DisplayModeSwitch.DisplayMode
 open DisplayModeSwitch
 
 [<EntryPoint>]
-let main argv =
+let main _ =
     for d in (GetDisplayDevices() |> Seq.filter (fun d -> d.Active)) do 
         printfn "%s" <| d.ToString()
         
