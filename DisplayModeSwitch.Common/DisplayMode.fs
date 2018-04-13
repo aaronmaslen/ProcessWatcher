@@ -211,4 +211,4 @@ module DisplayMode =
         match result with
         | ChangeDisplaySettingsResult.Successful -> Ok()
         | ChangeDisplaySettingsResult.ChangeRestart -> Error <| RestartNeeded
-        | _ -> Error <| Failure (result |> uint32)
+        | _ -> Error <| (Failure << uint32) result

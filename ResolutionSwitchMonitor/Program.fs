@@ -2,6 +2,10 @@
 
 open FSharp.Text.RegexProvider
 
+open ProcessWatcher.Common
+open DisplayModeSwitch.DisplayMode
+open DisplayModeSwitch
+
 type ResolutionRegex = Regex< @"^(?<XRes>\d{3,})x(?<YRes>\d{3,})">
 
 type Parameter =
@@ -9,7 +13,9 @@ type Parameter =
 | ExecutablePath of string
 | RunningDirectory of string
 | MonitorChildProcesses of bool
+| WaitForProcess of string
 | Error of string
+| Help
 
 let (|Head|_|) (head : string) (s : string) =
     if s.StartsWith head then s.Substring head.Length |> Some
@@ -54,14 +60,30 @@ let parseArgs (argv : string[]) =
                 match resMatch s with
                 | Some r -> (r, valueIndex)
                 | None -> (Error <| sprintf "%s does not look like a resolution" s, valueIndex)
-            
+            | "d" ->
+                match value with
+                | None -> (Error <| sprintf "Missing running directory", valueIndex)
+                | Some d -> (RunningDirectory d, valueIndex + 1)
+            | Head "running-directory=" d -> (RunningDirectory d, valueIndex)
+            | "x" ->
+                match value with
+                | None -> (Error <| sprintf "Missing executable path", valueIndex)
+                | Some x -> (ExecutablePath x, valueIndex + 1)
+            | Head "executable-path=" x -> (ExecutablePath x, valueIndex + 1)
+            | "w" ->
+                match value with
+                | None -> (Error <| sprintf "Missing process name", valueIndex)
+                | Some p -> (WaitForProcess p, valueIndex + 1)
+            | Head "wait-for-process=" p -> (WaitForProcess p, valueIndex)
+            | "h"
+            | "help" -> (Help, valueIndex)
             | _ -> (Error <| sprintf "Unknown param -%s" name, valueIndex)
         
         let argSeq = arg |> Seq.singleton |> Seq.append argSeq
 
         let next = nameIndex + 1
         if next >= argNames.Length then
-            if valueIndex < argValues.Length
+            if valueIndex = argValues.Length
                 && argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false))
             then
                 argValues.[valueIndex]
@@ -85,5 +107,73 @@ let main argv =
         | MonitorChildProcesses true -> printfn "Monitor child processes"
         | MonitorChildProcesses false -> printfn "Do not monitor child processes"
         | Error e -> printfn "Error: %s" e
+        | WaitForProcess p -> printfn "Wait for process: %s" p
+        | Help ->
+            printfn "%s"
+                ("Usage: ResolutionSwitchMonitor [-r resolution] [-d <running directory>"
+                + " [-c [-w <wait for process>]] [-x] <executable path>")
+        
+    if args |> Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false) then
+        let exe =
+           args
+           |> Seq.rev
+           |> Seq.pick (fun a -> match a with ExecutablePath x -> Some x | _ -> None)
+        
+        let watchChildren =
+            if args |> Seq.exists (fun a -> match a with MonitorChildProcesses _ -> true | _ -> false) then
+                args
+                |> Seq.rev
+                |> Seq.pick (fun a -> match a with MonitorChildProcesses c -> Some c | _ -> None)
+            else false
 
-    0 // return an integer exit code
+        let proc = ProcessWatcher (exe, true, watchChildren)
+        proc.Start()
+
+        if args |> Seq.exists (fun a -> match a with Resolution _ -> true | _ -> false) then
+            let (x, y) =
+                args
+                |> Seq.rev
+                |> Seq.pick (fun a -> match a with Resolution (x,y) -> (x,y) |> Some | _ -> None)
+
+            let dev =
+                GetDisplayDevices()
+                |> Seq.where
+                    (fun d ->
+                        printfn "Device Detected: %s, Active: %b, Primary: %b" d.DeviceString d.Active d.PrimaryDevice
+                        d.Active
+                        && d.PrimaryDevice
+                    )
+                |> Seq.head
+
+            let mode =
+                GetDisplayModes dev
+                |> Seq.where
+                    (fun m ->
+                        m.FixedOutput.IsNone
+                        || m.FixedOutput.Value = FixedOutputMode.Default
+                    )
+                |> Seq.where
+                    (fun m ->
+                        match m.Resolution with
+                        | Some (mx, my) -> mx = (x |> uint32) && my = (y |> uint32)
+                        | None -> false
+                    )
+                |> Seq.tryHead
+
+            if mode.IsSome then
+                let x, y = mode.Value.Resolution.Value
+                printfn "Mode: %ux%u" x y
+                let result =
+                    SetDisplayMode dev mode.Value (SetDisplayModeOptions.Temporary |> Seq.singleton)
+                    |> function
+                    | Ok _ -> "OK"
+                    | Result.Error RestartNeeded -> "failed. Restart needed"
+                    | Result.Error u -> "failed. Code: " + (u |> string)
+                printfn
+                    "Setting mode %s" result
+
+        proc.AllProcessesEndedEvent |> (Async.AwaitEvent >> Async.RunSynchronously)
+        0
+    else
+        printfn "Missing executable path"
+        -1
