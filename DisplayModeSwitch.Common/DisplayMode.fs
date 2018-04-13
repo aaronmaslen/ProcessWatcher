@@ -38,114 +38,96 @@ module DisplayMode =
 
     type DisplayMode internal (mode : DevMode) =
         let displayAttributes = 
-            mode |>
-            (
-                GetAttributes >>
-                Seq.collect
+            mode
+            |> GetAttributes
+            |> Seq.collect
                     (fun a ->
                         match a with
                         | Display d -> Seq.singleton d
                         | _ -> Seq.empty
                     )
-            )
         member internal __.NativeDevMode = mode
         member __.DeviceName = mode.DeviceName
         member __.Position =
-            displayAttributes |>
-            (
-                Seq.collect
+            displayAttributes
+            |> Seq.collect
                     (fun d ->
                         match d with
                         | Position (x, y) -> Seq.singleton (x, y)
                         | _ -> Seq.empty
                     )
-                >> Seq.tryHead
-            )
+            |> Seq.tryHead
         member __.Orientation =
-            displayAttributes |>
-            (
-                Seq.collect 
-                    (fun d ->
-                        match d with 
-                        | DevModeDisplayAttribute.Orientation o -> Seq.singleton o
-                        | _ -> Seq.empty
-                    )
-                >> Seq.tryHead
-            )
+            displayAttributes
+            |> Seq.collect 
+                (fun d ->
+                    match d with 
+                    | DevModeDisplayAttribute.Orientation o -> Seq.singleton o
+                    | _ -> Seq.empty
+                )
+            |> Seq.tryHead
         member __.FixedOutput =
-            displayAttributes |>
-            (
-                Seq.collect
-                    (fun d ->
-                        match d with
-                        | FixedOutput f -> Seq.singleton f
-                        | _ -> Seq.empty
-                    )
-                >> Seq.tryHead
-            )
+            displayAttributes
+            |> Seq.collect
+                (fun d ->
+                    match d with
+                    | FixedOutput f -> Seq.singleton f
+                    | _ -> Seq.empty
+                )
+            |> Seq.tryHead
         member __.LogPixels =
-            displayAttributes |>
-            (   
-                Seq.collect
-                    (fun d ->
-                        match d with
-                        | LogPixels l -> Seq.singleton l
-                        | _ -> Seq.empty
-                    )
-                >> Seq.tryHead
-            )
+            displayAttributes
+            |> Seq.collect
+                (fun d ->
+                    match d with
+                    | LogPixels l -> Seq.singleton l
+                    | _ -> Seq.empty
+                )
+            |> Seq.tryHead
         member __.BitsPerPixel =
-            displayAttributes |>
-            (
-                Seq.collect
-                    (fun d ->
-                        match d with
-                        | BitsPerPixel b -> Seq.singleton b
-                        | _ -> Seq.empty
-                    )
-                >> Seq.tryHead
-            )
+            displayAttributes
+            |> Seq.collect
+                (fun d ->
+                    match d with
+                    | BitsPerPixel b -> Seq.singleton b
+                    | _ -> Seq.empty
+                )
+            |> Seq.tryHead
         member __.Resolution =
             let xres =
-                displayAttributes |>
-                (
-                    Seq.collect
-                        (fun d ->
-                            match d with
-                            | PixelsWidth x -> Seq.singleton x
-                            | _ -> Seq.empty
-                        ) 
-                    >> Seq.tryHead
-                )
-            let yres =
-                displayAttributes |>
-                (
-                    Seq.collect
-                        (fun d ->
-                            match d with
-                            | PixelsHeight y -> Seq.singleton y
-                            | _ -> Seq.empty
-                        )
-                    >> Seq.tryHead
-                )
-                    
-            xres |>
-            Option.bind 
-                (fun x ->
-                    yres |>
-                    Option.map (fun y -> (x,y))
-                )
-        member __.RefreshRate =
-            displayAttributes |>
-            (
-                Seq.collect
+                displayAttributes
+                |> Seq.collect
                     (fun d ->
                         match d with
-                        | Frequency f -> Seq.singleton f
+                        | PixelsWidth x -> Seq.singleton x
+                        | _ -> Seq.empty
+                    ) 
+                |> Seq.tryHead
+            let yres =
+                displayAttributes
+                |> Seq.collect
+                    (fun d ->
+                        match d with
+                        | PixelsHeight y -> Seq.singleton y
                         | _ -> Seq.empty
                     )
-                >> Seq.tryHead
-            )
+                |> Seq.tryHead
+                    
+            xres
+            |> Option.bind
+                (fun x ->
+                    yres
+                    |> Option.map (fun y -> (x,y))
+                )
+        member __.RefreshRate =
+            displayAttributes
+            |> Seq.collect
+                (fun d ->
+                    match d with
+                    | Frequency f -> Seq.singleton f
+                    | _ -> Seq.empty
+                )
+            |> Seq.tryHead
         override this.ToString() =
             let resolution =
                 match this.Resolution with
@@ -156,8 +138,8 @@ module DisplayMode =
                 | Some r -> Some <| sprintf "%uHz" r
                 | None -> None
             let scaleMode =
-                this.FixedOutput |>
-                Option.bind
+                this.FixedOutput
+                |> Option.bind
                     (fun f ->
                         match f with
                         | FixedOutputMode.Stretch -> Some "Stretch"
@@ -212,8 +194,8 @@ module DisplayMode =
 
     let SetDisplayMode dev mode (options : SetDisplayModeOptions seq) =
         let flags =
-            options |>
-            Seq.fold
+            (ChangeDisplayModeFlags.None, options)
+            ||> Seq.fold
                 (fun s c ->
                     match c with
                     | Temporary -> ChangeDisplayModeFlags.FullScreen
@@ -223,7 +205,6 @@ module DisplayMode =
 
                     ||| s
                 )
-                ChangeDisplayModeFlags.None
         
         let result = setDisplayMode dev mode flags
 

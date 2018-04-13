@@ -20,7 +20,20 @@ let resMatch s =
     if r.Success then Resolution (r.XRes.Value |> int, r.YRes.Value |> int) |> Some
     else None
 
-let parseArgs (argNames : string list) (argValues : string list) =
+let parseArgs (argv : string[]) =
+    let getArgs =
+        Array.map
+            (fun s ->
+                match s with
+                | Head "--" s -> ([| s |], [| |])
+                | Head "-" s -> (seq { for c in s -> c |> string } |> Seq.toArray, [| |])
+                | _ -> ([| |], [| s |])
+            )
+        >> Array.unzip
+        >> (fun (a, b) -> (Array.collect id a, Array.collect id b))
+
+    let (argNames, argValues) = getArgs argv
+
     let rec args nameIndex valueIndex argSeq =
         let name = argNames.[nameIndex]
         let value = if valueIndex >= argValues.Length then None else argValues.[valueIndex] |> Some
@@ -44,15 +57,17 @@ let parseArgs (argNames : string list) (argValues : string list) =
             
             | _ -> (Error <| sprintf "Unknown param -%s" name, valueIndex)
         
-        let argSeq = arg |> (Seq.singleton >> Seq.append argSeq)
+        let argSeq = arg |> Seq.singleton |> Seq.append argSeq
 
         let next = nameIndex + 1
         if next >= argNames.Length then
             if valueIndex < argValues.Length
-               && argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false)) then
+                && argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false))
+            then
                 argValues.[valueIndex]
                 |> ExecutablePath
-                |> (Seq.singleton >> Seq.append argSeq)
+                |> Seq.singleton
+                |> Seq.append argSeq
             else argSeq
         else args (nameIndex + 1) nextValue argSeq
 
@@ -60,21 +75,7 @@ let parseArgs (argNames : string list) (argValues : string list) =
 
 [<EntryPoint>]
 let main argv =
-    let (argNames, argValues) =        
-        argv
-        |> (Array.toList
-            >> List.map
-                (fun s ->
-                    match s with
-                    | Head "--" s -> (s |> Seq.singleton, Seq.empty)
-                    | Head "-" s -> (seq { for c in s -> c |> string }, Seq.empty)
-                    | _ -> (Seq.empty, s |> Seq.singleton)
-                )
-            >> List.unzip
-            >> (fun (a, b) -> (Seq.collect id a, Seq.collect id b))
-        )
-
-    let args = parseArgs (argNames |> Seq.toList) (argValues |> Seq.toList)
+    let args = parseArgs argv
 
     for a in args do
         match a with
