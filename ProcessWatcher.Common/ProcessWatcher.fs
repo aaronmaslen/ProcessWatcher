@@ -9,7 +9,7 @@ open System.Reactive.Linq
 
 module Wmi =
     let private wmiEventQuery = new WqlEventQuery("__InstanceOperationEvent",
-                                                  TimeSpan(0,0,0,0,100),
+                                                  TimeSpan(0,0,0,0,1000),
                                                   "TargetInstance ISA 'Win32_Process'")
     let private watcher = new ManagementEventWatcher(wmiEventQuery)
     let WatcherEvent = watcher.EventArrived.Select(fun wea -> wea.NewEvent)
