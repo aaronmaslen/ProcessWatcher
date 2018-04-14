@@ -51,8 +51,8 @@ type ProcessEventType =
 | Start
 | Exit
 
-type ProcessWatcher(processPath, start, watchChildren) =
-    let processName = Path.GetFileName(processPath)
+type ProcessWatcher(processInfo : ProcessStartInfo, start, watchChildren) =
+    let processName = processInfo.FileName
     let mutable pids : (uint32 * bool) list = list.Empty
     let processEvent = new Event<_>()
     let endEvent = new Event<_>()
@@ -80,6 +80,9 @@ type ProcessWatcher(processPath, start, watchChildren) =
                     (Wmi.Pid targetInstance) = pid
                 ) || ((Wmi.ProcessName targetInstance) = processName)
             )
+    new (processPath, start, watchChildren) =
+        let psi = new ProcessStartInfo(processPath)
+        ProcessWatcher (psi, start, watchChildren)
     member __.Start(?span) =
         createEvent.Add(fun targetInstance ->
             let pid = Wmi.Pid targetInstance
@@ -92,8 +95,8 @@ type ProcessWatcher(processPath, start, watchChildren) =
             if pids.Any(fun (p, _) -> p = pid) then
                 pids <-
                     List.append
-                        (List.where (fun (p, _) -> p <> pid) pids)
-                        (List.singleton (pid, false))
+                        (List.where(fun (p, _) -> p <> pid) pids)
+                        (List.singleton(pid, false))
         )
 
         createEvent.Add(fun targetInstance -> 
@@ -119,7 +122,7 @@ type ProcessWatcher(processPath, start, watchChildren) =
         Wmi.Start(span)
 
         if start then
-            let p : Process = Process.Start(processPath)
+            let p : Process = Process.Start(processInfo)
             pids <- List.append pids (List.singleton ((uint32 p.Id), true))
 
     [<CLIEvent>]
