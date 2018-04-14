@@ -1,8 +1,15 @@
 ﻿open System
+open System.Diagnostics
+open System.IO
 
 open FSharp.Text.RegexProvider
 
+open FSharpx.Control.Observable
+
 open ProcessWatcher.Common
+
+open System.Reactive.Linq
+
 open DisplayModeSwitch.DisplayMode
 open DisplayModeSwitch
 
@@ -11,7 +18,8 @@ type ResolutionRegex = Regex< @"^(?<XRes>\d{3,})x(?<YRes>\d{3,})">
 type Parameter =
 | Resolution of int * int
 | ExecutablePath of string
-| RunningDirectory of string
+| WorkingDirectory of string
+| Parameters of string
 | MonitorChildProcesses of bool
 | WaitForProcess of string
 | Error of string
@@ -63,8 +71,8 @@ let parseArgs (argv : string[]) =
             | "d" ->
                 match value with
                 | None -> (Error <| sprintf "Missing running directory", valueIndex)
-                | Some d -> (RunningDirectory d, valueIndex + 1)
-            | Head "running-directory=" d -> (RunningDirectory d, valueIndex)
+                | Some d -> (WorkingDirectory d, valueIndex + 1)
+            | Head "running-directory=" d -> (WorkingDirectory d, valueIndex)
             | "x" ->
                 match value with
                 | None -> (Error <| sprintf "Missing executable path", valueIndex)
@@ -75,6 +83,7 @@ let parseArgs (argv : string[]) =
                 | None -> (Error <| sprintf "Missing process name", valueIndex)
                 | Some p -> (WaitForProcess p, valueIndex + 1)
             | Head "wait-for-process=" p -> (WaitForProcess p, valueIndex)
+            | Head "params=" p -> (Parameters p, valueIndex)
             | "h"
             | "help" -> (Help, valueIndex)
             | _ -> (Error <| sprintf "Unknown param -%s" name, valueIndex)
@@ -83,7 +92,7 @@ let parseArgs (argv : string[]) =
 
         let next = nameIndex + 1
         if next >= argNames.Length then
-            if valueIndex = argValues.Length
+            if valueIndex < argValues.Length
                 && argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false))
             then
                 argValues.[valueIndex]
@@ -101,20 +110,21 @@ let main argv =
 
     for a in args do
         match a with
-        | Resolution (x, y) -> printfn "Resolution: %ix%i" x y
-        | ExecutablePath x -> printfn "Execute: %s" x
-        | RunningDirectory d -> printfn "Run in: %s" d
-        | MonitorChildProcesses true -> printfn "Monitor child processes"
-        | MonitorChildProcesses false -> printfn "Do not monitor child processes"
+        | Resolution (x, y) -> printfn "DEBUG: Resolution: %ix%i" x y
+        | ExecutablePath x -> printfn "DEBUG: Execute: %s" x
+        | WorkingDirectory d -> printfn "DEBUG: Run in: %s" d
+        | MonitorChildProcesses true -> printfn "DEBUG: Monitor child processes"
+        | MonitorChildProcesses false -> printfn "DEBUG: Do not monitor child processes"
+        | WaitForProcess p -> printfn "DEBUG: Wait for process: %s" p
+        | Parameters p -> printfn "DEBUG: %s" p
         | Error e -> printfn "Error: %s" e
-        | WaitForProcess p -> printfn "Wait for process: %s" p
         | Help ->
             printfn "%s"
                 ("Usage: ResolutionSwitchMonitor [-r resolution] [-d <running directory>"
                 + " [-c [-w <wait for process>]] [-x] <executable path>")
         
     if args |> Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false) then
-        let exe =
+        let processPath =
            args
            |> Seq.rev
            |> Seq.pick (fun a -> match a with ExecutablePath x -> Some x | _ -> None)
@@ -124,10 +134,40 @@ let main argv =
                 args
                 |> Seq.rev
                 |> Seq.pick (fun a -> match a with MonitorChildProcesses c -> Some c | _ -> None)
-            else false
+            else true
 
-        let proc = ProcessWatcher (exe, true, watchChildren)
-        proc.Start()
+        let psi = ProcessStartInfo(processPath)
+        psi.WorkingDirectory <-
+            if args |> Seq.exists (fun a -> match a with WorkingDirectory _ -> true | _ -> false) then
+                args
+                |> Seq.rev
+                |> Seq.pick (fun a -> match a with WorkingDirectory p -> Some p | _ -> None)
+            else Path.GetDirectoryName(processPath)
+        
+        if args |> Seq.exists (fun a -> match a with Parameters _ -> true | _ -> false) then
+            psi.Arguments <-
+                args
+                |> Seq.rev
+                |> Seq.pick (fun a -> match a with Parameters p -> Some p | _ -> None)
+
+        let watcher = ProcessWatcher (psi, true, watchChildren)
+        watcher.Start()
+
+        if args |> Seq.exists (fun a -> match a with WaitForProcess _ -> true | _ -> false) then
+            let processName =
+                args
+                |> Seq.rev
+                |> Seq.pick (fun a -> match a with WaitForProcess p -> Some p | _ -> None)
+
+            watcher.ProcessEvent.Where(fun (e,_,name) ->
+                printfn
+                    "DEBUG: %s %s"
+                    name
+                    (match e with Start -> "start" | Exit -> "exit")
+                match e with
+                | ProcessEventType.Start -> name = processName
+                | _ -> false
+            ) |> Async.AwaitObservable |> Async.Ignore |> Async.RunSynchronously
 
         if args |> Seq.exists (fun a -> match a with Resolution _ -> true | _ -> false) then
             let (x, y) =
@@ -172,7 +212,7 @@ let main argv =
                 printfn
                     "Setting mode %s" result
 
-        proc.AllProcessesEndedEvent |> (Async.AwaitEvent >> Async.RunSynchronously)
+        watcher.AllProcessesEndedEvent |> (Async.AwaitEvent >> Async.RunSynchronously)
         0
     else
         printfn "Missing executable path"
