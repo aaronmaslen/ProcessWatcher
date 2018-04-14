@@ -8,16 +8,26 @@ open System.Management
 open System.Reactive.Linq
 
 module Wmi =
-    let private wmiEventQuery = new WqlEventQuery("__InstanceOperationEvent",
-                                                  TimeSpan(0,0,0,0,1000),
-                                                  "TargetInstance ISA 'Win32_Process'")
-    let private watcher = new ManagementEventWatcher(wmiEventQuery)
+    let private defaultWmiEventQuery =
+        new WqlEventQuery("__InstanceOperationEvent",
+                          TimeSpan(0,0,0,0,1000),
+                          "TargetInstance ISA 'Win32_Process'")
+    let mutable private watcher = new ManagementEventWatcher(defaultWmiEventQuery)
     let WatcherEvent = watcher.EventArrived.Select(fun wea -> wea.NewEvent)
     let CreateEvent = WatcherEvent.Where(fun e -> e.ClassPath.ClassName = "__InstanceCreationEvent")
     let DeleteEvent = WatcherEvent.Where(fun e -> e.ClassPath.ClassName = "__InstanceDeletionEvent")
     let mutable private started = false
-    let Start() =
+    let Start(span) =
         if not started then
+            watcher <-
+                match span with
+                | Some span ->
+                    let query =
+                        new WqlEventQuery("__InstanceOperationEvent",
+                                          span,
+                                          "TargetInstance ISA 'Win32_Process'")
+                    new ManagementEventWatcher(query)
+                | None -> watcher
             watcher.Start()
             started <- true
     let Stop() =
@@ -62,7 +72,7 @@ type ProcessWatcher(processPath, start, watchChildren) =
                                      ) ||
                                     (Wmi.ProcessName targetInstance) = processName
                          )
-    member __.Start() =
+    member __.Start(?span) =
         createEvent.Add(fun targetInstance ->
                             let pid = Wmi.Pid targetInstance
                             if not (pids.Any(fun (p, _) -> p = pid)) then
@@ -97,7 +107,7 @@ type ProcessWatcher(processPath, start, watchChildren) =
 
         deleteEvent.Add(fun _ -> if not (pids.Any(fun (_, running) -> running)) then endEvent.Trigger())
 
-        Wmi.Start()
+        Wmi.Start(span)
 
         if start then
             let p : Process = Process.Start(processPath)
