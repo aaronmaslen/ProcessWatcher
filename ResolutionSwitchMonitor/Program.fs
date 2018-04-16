@@ -49,6 +49,8 @@ let parseArgs (argv : string[]) =
     let (argNames, argValues) = getArgs argv
 
     let rec args nameIndex valueIndex argSeq =
+        if argNames.Length = 0 then raise <| ArgumentException("No args provided")
+
         let name = argNames.[nameIndex]
         let value = if valueIndex >= argValues.Length then None else argValues.[valueIndex] |> Some
 
@@ -102,7 +104,9 @@ let parseArgs (argv : string[]) =
             else argSeq
         else args (nameIndex + 1) nextValue argSeq
 
-    args 0 0 Seq.empty
+    if argNames.Length <> 0
+    then args 0 0 Seq.empty
+    else Seq.empty
 
 [<EntryPoint>]
 let main argv =
