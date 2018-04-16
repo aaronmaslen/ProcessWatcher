@@ -5,21 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": ".NET Core Launch (console)",
+            "name": ".NET Launch (console)",
             "type": "clr",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/ResolutionSwitchMonitor/bin/Debug/net471/ResolutionSwitchMonitor.exe",
-            "args": [],
+            "args": ["notepad.exe"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "stopAtEntry": false
-        },
-        {
-            "name": ".NET Attach",
-            "type": "clr",
-            "request": "attach",
-            "processId": "${command:pickProcess}"
         }
     ]
 }
