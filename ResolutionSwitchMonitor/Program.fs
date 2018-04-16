@@ -49,78 +49,127 @@ let parseArgs (argv : string[]) =
     let (argNames, argValues) = getArgs argv
 
     let rec args nameIndex valueIndex argSeq =
-        if argNames.Length = 0 then raise <| ArgumentException("No args provided")
-
-        let name = argNames.[nameIndex]
         let value = if valueIndex >= argValues.Length then None else argValues.[valueIndex] |> Some
 
-        let (arg, nextValue) =
-            match name with
-            | "c"
-            | "monitor-child-processes" -> (MonitorChildProcesses true, valueIndex)
-            | "no-monitor-child-processes" -> (MonitorChildProcesses false, valueIndex)
-            | "r" ->
-                match value with
-                | None -> (Error <| sprintf "Missing resolution value", valueIndex)
-                | Some s ->
+        let a =
+            if nameIndex < argNames.Length then
+                let name = argNames.[nameIndex]
+                match name with
+                | "c"
+                | "monitor-child-processes" -> (MonitorChildProcesses true, valueIndex)
+                | "no-monitor-child-processes" -> (MonitorChildProcesses false, valueIndex)
+                | "r" ->
+                    match value with
+                    | None -> (Error <| sprintf "Missing resolution value", valueIndex)
+                    | Some s ->
+                        match resMatch s with
+                        | Some r -> (r, valueIndex + 1)
+                        | None -> (Error <| sprintf "%s does not look like a resolution" s, valueIndex + 1)
+                | Head "resolution=" s ->
                     match resMatch s with
-                    | Some r -> (r, valueIndex + 1)
-                    | None -> (Error <| sprintf "%s does not look like a resolution" s, valueIndex + 1)
-            | Head "resolution=" s ->
-                match resMatch s with
-                | Some r -> (r, valueIndex)
-                | None -> (Error <| sprintf "%s does not look like a resolution" s, valueIndex)
-            | "d" ->
-                match value with
-                | None -> (Error <| sprintf "Missing running directory", valueIndex)
-                | Some d -> (WorkingDirectory d, valueIndex + 1)
-            | Head "running-directory=" d -> (WorkingDirectory d, valueIndex)
-            | "x" ->
-                match value with
-                | None -> (Error <| sprintf "Missing executable path", valueIndex)
-                | Some x -> (ExecutablePath x, valueIndex + 1)
-            | Head "executable-path=" x -> (ExecutablePath x, valueIndex + 1)
-            | "w" ->
-                match value with
-                | None -> (Error <| sprintf "Missing process name", valueIndex)
-                | Some p -> (WaitForProcess p, valueIndex + 1)
-            | Head "wait-for-process=" p -> (WaitForProcess p, valueIndex)
-            | Head "params=" p -> (Parameters p, valueIndex)
-            | "h"
-            | "help" -> (Help, valueIndex)
-            | _ -> (Error <| sprintf "Unknown param -%s" name, valueIndex)
+                    | Some r -> (r, valueIndex)
+                    | None -> (Error <| sprintf "%s does not look like a resolution" s, valueIndex)
+                | "d" ->
+                    match value with
+                    | None -> (Error <| sprintf "Missing running directory", valueIndex)
+                    | Some d -> (WorkingDirectory d, valueIndex + 1)
+                | Head "running-directory=" d -> (WorkingDirectory d, valueIndex)
+                | "x" ->
+                    match value with
+                    | None -> (Error <| sprintf "Missing executable path", valueIndex)
+                    | Some x -> (ExecutablePath x, valueIndex + 1)
+                | Head "executable-path=" x -> (ExecutablePath x, valueIndex + 1)
+                | "w" ->
+                    match value with
+                    | None -> (Error <| sprintf "Missing process name", valueIndex)
+                    | Some p -> (WaitForProcess p, valueIndex + 1)
+                | Head "wait-for-process=" p -> (WaitForProcess p, valueIndex)
+                | Head "params=" p -> (Parameters p, valueIndex)
+                | "h"
+                | "help" -> (Help, valueIndex)
+                | _ -> (Error <| sprintf "Unknown param -%s" name, valueIndex)
+                |> Some
+            else None
         
-        let argSeq = arg |> Seq.singleton |> Seq.append argSeq
+        let (argSeq, nextValue) =
+            match a with
+            | Some (arg, nextIndex) ->
+                ((arg |> Seq.singleton |> Seq.append argSeq), nextIndex)
+            | None -> (argSeq, valueIndex)
 
         let next = nameIndex + 1
         if next >= argNames.Length then
-            if valueIndex < argValues.Length
-                && argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false))
+            argSeq
+            |>
+            if argSeq |> (not << Seq.exists (fun a -> match a with ExecutablePath _ -> true | _ -> false))
             then
-                argValues.[valueIndex]
-                |> ExecutablePath
-                |> Seq.singleton
-                |> Seq.append argSeq
-            else argSeq
-        else args (nameIndex + 1) nextValue argSeq
+                match value with
+                | Some v ->
+                    v
+                    |> ExecutablePath
+                    |> Seq.singleton
+                    |> Seq.append
+                | None -> id
+            else id
+        else args (next) nextValue argSeq
 
-    if argNames.Length <> 0
-    then args 0 0 Seq.empty
-    else Seq.empty
+    args 0 0 Seq.empty
 
 [<EntryPoint>]
 let main argv =
+    #if DEBUG
+    printf "DEBUG: Args:"
+    for s in argv do
+        printf " %s" s
+    printfn ""
+    #endif
+
     let args = parseArgs argv
 
     for a in args do
         match a with
-        | Resolution (x, y) -> printfn "DEBUG: Resolution: %ix%i" x y
-        | ExecutablePath x -> printfn "DEBUG: Execute: %s" x
-        | WorkingDirectory d -> printfn "DEBUG: Run in: %s" d
-        | MonitorChildProcesses true -> printfn "DEBUG: Monitor child processes"
-        | MonitorChildProcesses false -> printfn "DEBUG: Do not monitor child processes"
-        | WaitForProcess p -> printfn "DEBUG: Wait for process: %s" p
-        | Parameters p -> printfn "DEBUG: %s" p
+        | Resolution (x, y) ->
+            #if DEBUG
+            printfn "DEBUG: Resolution: %ix%i" x y
+            #else
+            ()
+            #endif
+        | ExecutablePath x ->
+            #if DEBUG
+            printfn "DEBUG: Execute: %s" x
+            #else
+            ()
+            #endif
+        | WorkingDirectory d ->
+            #if DEBUG
+            printfn "DEBUG: Run in: %s" d
+            #else
+            ()
+            #endif
+        | MonitorChildProcesses true ->
+            #if DEBUG
+            printfn "DEBUG: Monitor child processes"
+            #else
+            ()
+            #endif
+        | MonitorChildProcesses false ->
+            #if DEBUG
+            printfn "DEBUG: Do not monitor child processes"
+            #else
+            ()
+            #endif
+        | WaitForProcess p ->
+            #if DEBUG
+            printfn "DEBUG: Wait for process: %s" p
+            #else
+            ()
+            #endif
+        | Parameters p ->
+            #if DEBUG
+            printfn "DEBUG: %s" p
+            #else
+            ()
+            #endif
         | Error e -> printfn "Error: %s" e
         | Help ->
             printfn "%s"
@@ -164,10 +213,12 @@ let main argv =
                 |> Seq.pick (fun a -> match a with WaitForProcess p -> Some p | _ -> None)
 
             watcher.ProcessEvent.Where(fun (e,_,name) ->
+                #if DEBUG
                 printfn
                     "DEBUG: %s %s"
                     name
                     (match e with Start -> "start" | Exit -> "exit")
+                #endif
                 match e with
                 | ProcessEventType.Start -> name = processName
                 | _ -> false
